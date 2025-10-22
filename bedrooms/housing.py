@@ -3,20 +3,28 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-def filter_data(state, county):
+def filter_data(state, county, bedroom = None):
     """filters the data for the given state or county"""
 
     file_paths = {
-        "1 bed":"data/County_zhvi_bdrmcnt_1_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
-        "2 bed":"data/County_zhvi_bdrmcnt_2_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
-        "3 bed":"data/County_zhvi_bdrmcnt_3_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
-        "4 bed":"data/County_zhvi_bdrmcnt_4_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
-        "5+ bed":"data/County_zhvi_bdrmcnt_5_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
+        1:"data/County_zhvi_bdrmcnt_1_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
+        2:"data/County_zhvi_bdrmcnt_2_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
+        3:"data/County_zhvi_bdrmcnt_3_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
+        4:"data/County_zhvi_bdrmcnt_4_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
+        5:"data/County_zhvi_bdrmcnt_5_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
     }
 
     dataframes = []
 
-    for label, path in file_paths.items():
+    # Fileter bedroom dataset
+    if bedroom is None:
+        target_data = dict(file_paths)
+    elif bedroom >5:
+        target_data = {bedroom: file_paths[bedroom]}
+    else:
+        target_data = {bedroom: file_paths[bedroom]}
+
+    for label, path in target_data.items():
         df = pd.read_csv(path)
 
         # Filter by county and state
