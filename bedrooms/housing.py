@@ -2,6 +2,7 @@ import re
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 
 def filter_data(state, county, bedroom = None):
     """filters the data for the given state or county"""
@@ -40,41 +41,61 @@ def filter_data(state, county, bedroom = None):
         # Transpose so dates become rows
         ts = filtered[date_cols].T
         ts.columns = [label]
-        ts['Date'] = ts.index
-        ts.reset_index(drop=True, inplace=True)
-        ts = ts[['Date', label]]
-
+        ts.index = pd.to_datetime(ts.index)
         dataframes.append(ts)
 
     # Merge all bedroom categories on the Date column
     if len(dataframes) == 0:
         raise ValueError("No Data found.")
 
-    final_df = dataframes[0]
-    for df in dataframes[1:]:
-        final_df = pd.merge(final_df, df, on='Date', how='outer')
+    final_df = pd.concat(dataframes, axis=1).sort_index()
 
-    final_df['Date'] = pd.to_datetime(final_df['Date'])
-
-
+    if final_df.shape[1] == 1:
+        return final_df.iloc[:, 0]
     return final_df
 
+def predict_future_prices(price_data: pd.Series, years_to_predict: int = 3) -> pd.Series:
+    """Use linear regression to project future prices."""
+    # Convert dates to numeric for regression
+    X = np.array((price_data.index.year * 12 + price_data.index.month)).reshape(-1, 1)
+    y = price_data.values
 
-def predict_linear_regression(dataframes):
-    pass
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # Predict next N years (12 * years)
+    last_date = price_data.index[-1]
+    future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq='M')[1:]
+    future_X = np.array((future_months.year * 12 + future_months.month)).reshape(-1, 1)
+    future_y = model.predict(future_X)
+
+    return pd.Series(future_y, index=future_months)
+
+def plot_trend(city_name: str, price_data: pd.Series, future_data: pd.Series):
+    """Plot the historical and projected price data."""
+    plt.figure(figsize=(10, 5))
+    plt.plot(price_data.index, price_data.values, label='Historical Prices', color='blue')
+    plt.plot(future_data.index, future_data.values, label='Projected Prices', color='orange', linestyle='--')
+    plt.title(f"Median Home Sale Prices — {city_name}")
+    plt.xlabel("Year")
+    plt.ylabel("Median Sale Price (USD)")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 
 def main() -> None:
     state_initials = "CO"
     county_name = "Mesa County"
+    bedroom_num = 1
 
-    df = filter_data(state_initials, county_name)
+    df = filter_data(state_initials, county_name, bedroom = bedroom_num)
 
     if not df.empty:
         print(df)
-
-        # add prediction
-        # add graph
+        future = predict_future_prices(df)
+        plot_trend(county_name +", " + state_initials, df, future)
 
 
 if __name__ == "__main__":
