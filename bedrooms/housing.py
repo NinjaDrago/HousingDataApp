@@ -4,10 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.arima.model import ARIMA
+
 
 def filter_data(state, county, bedroom = None):
     """filters the data for the given state or county"""
-
     file_paths = {
         1:"data/County_zhvi_bdrmcnt_1_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
         2:"data/County_zhvi_bdrmcnt_2_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv",
@@ -50,92 +53,138 @@ def filter_data(state, county, bedroom = None):
         return final_df.iloc[:, 0]
     return final_df
 
-def predict_future_prices(price_data: pd.Series, years_to_predict: int = 3) -> pd.Series:
+
+def predict_future_prices(price_data: pd.Series, years_to_predict: int = 3,
+                          predict_future: bool = True, predict_on=None) -> pd.Series:
     """Use linear regression to project future prices"""
-    # Convert dates to numeric for regression
-    X = np.array((price_data.index.year * 12 + price_data.index.month)).reshape(-1, 1)
+    # Prepare training data
+    X = np.array(price_data.index.year * 12 + price_data.index.month).reshape(-1, 1)
     y = price_data.values
 
     model = LinearRegression()
     model.fit(X, y)
 
-    # Predict next N years (12 * years)
-    last_date = price_data.index[-1]
-    future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq='M')[1:]
-    future_X = np.array((future_months.year * 12 + future_months.month)).reshape(-1, 1)
-    future_y = model.predict(future_X)
+    if predict_on is not None:
+        # Predict for test dates
+        X_test = np.array(predict_on.year * 12 + predict_on.month).reshape(-1, 1)
+        preds = model.predict(X_test)
+        return pd.Series(preds, index=predict_on, name="Predicted (Test)")
+    elif predict_future:
+        # Future prediction
+        last_date = price_data.index[-12]
+        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="M")[1:]
+        X_future = np.array(future_months.year * 12 + future_months.month).reshape(-1, 1)
+        preds = model.predict(X_future)
+        return pd.Series(preds, index=future_months, name="Predicted (Future)")
+    else:
+        # Predict within dataset
+        preds = model.predict(X)
+        return pd.Series(preds, index=price_data.index, name="Predicted (Train)")
 
-    return pd.Series(future_y, index=future_months)
 
 def linear_r_gd(price_data: pd.Series, years_to_predict: int = 3,
-                learning_rate: float = 0.01, n_iterations: int = 10000) -> pd.Series:
+                learning_rate: float = 0.1, n_iterations: int = 10000,
+                predict_future: bool = True, predict_on=None) -> pd.Series:
     """Predicts future prices using simple linear regression trained via gradient descent."""
-
-    # Convert dates to numeric for regression
     X = np.array(price_data.index.year * 12 + price_data.index.month, dtype=float).reshape(-1, 1)
     y = price_data.values.reshape(-1, 1)
 
-    # Normalize X
+    # Normalize
     X_mean, X_std = X.mean(), X.std()
     X_norm = (X - X_mean) / X_std
 
     # Initialize parameters
-    m = 0.0
-    b = 0.0
+    m, b = 0.0, 0.0
     n = len(X)
 
-    # Gradient descent loop
+    # Gradient descent
     for _ in range(n_iterations):
         y_pred = m * X_norm + b
         error = y_pred - y
-
-        # Compute gradients
         dm = (2 / n) * np.sum(error * X_norm)
         db = (2 / n) * np.sum(error)
-
-        # Update parameters
         m -= learning_rate * dm
         b -= learning_rate * db
 
-    # Generate future months
-    last_date = price_data.index[-1]
-    future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq='M')[1:]
-    future_X = np.array(future_months.year * 12 + future_months.month, dtype=float).reshape(-1, 1)
+    if predict_on is not None:
+        # Predict for test dates
+        X_test = np.array(predict_on.year * 12 + predict_on.month, dtype=float).reshape(-1, 1)
+        X_test_norm = (X_test - X_mean) / X_std
+        preds = m * X_test_norm + b
+        return pd.Series(preds.flatten(), index=predict_on, name="Predicted (Test)")
+    elif predict_future:
+        # Future prediction
+        last_date = price_data.index[-1]
+        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="M")[1:]
+        X_future = np.array(future_months.year * 12 + future_months.month, dtype=float).reshape(-1, 1)
+        X_future_norm = (X_future - X_mean) / X_std
+        preds = m * X_future_norm + b
+        return pd.Series(preds.flatten(), index=future_months, name="Predicted (Future)")
+    else:
+        # Predict within dataset
+        preds = m * X_norm + b
+        return pd.Series(preds.flatten(), index=price_data.index, name="Predicted (Train)")
 
-    # Normalize using training data stats
-    future_X_norm = (future_X - X_mean) / X_std
 
-    # Predict future prices
-    future_y = m * future_X_norm + b
-
-    # Return predictions as Series
-    return pd.Series(future_y.flatten(), index=future_months, name="Predicted Price")
-
-def poly_r(price_data: pd.Series, years_to_predict: int = 3, degree: int = 3) -> pd.Series:
-    """ Predict future prices using polynomial regression."""
-
-    # Convert dates to numeric for regression
+def poly_r(price_data: pd.Series, years_to_predict: int = 3, degree: int = 3,
+           predict_future: bool = True, predict_on=None) -> pd.Series:
+    """Predict future prices using polynomial regression."""
     X = np.array(price_data.index.year * 12 + price_data.index.month, dtype=float).reshape(-1, 1)
     y = price_data.values
 
-    # Create polynomial features
     poly = PolynomialFeatures(degree=degree)
     X_poly = poly.fit_transform(X)
 
-    # Fit polynomial regression model
     model = LinearRegression()
     model.fit(X_poly, y)
 
-    # Predict into the future
-    last_date = price_data.index[-1]
-    future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq='M')[1:]
-    future_X = np.array(future_months.year * 12 + future_months.month, dtype=float).reshape(-1, 1)
-    future_X_poly = poly.transform(future_X)
+    if predict_on is not None:
+        # Predict for test dates
+        X_test = np.array(predict_on.year * 12 + predict_on.month, dtype=float).reshape(-1, 1)
+        X_test_poly = poly.transform(X_test)
+        preds = model.predict(X_test_poly)
+        return pd.Series(preds, index=predict_on, name=f"Predicted (Test deg={degree})")
+    elif predict_future:
+        # Future prediction
+        last_date = price_data.index[-12]
+        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="M")[1:]
+        X_future = np.array(future_months.year * 12 + future_months.month, dtype=float).reshape(-1, 1)
+        X_future_poly = poly.transform(X_future)
+        preds = model.predict(X_future_poly)
+        return pd.Series(preds, index=future_months, name=f"Predicted (Future deg={degree})")
+    else:
+        # Predict within dataset
+        preds = model.predict(X_poly)
+        return pd.Series(preds, index=price_data.index, name=f"Predicted (Train deg={degree})")
 
-    # Make predictions
-    future_y = model.predict(future_X_poly)
 
-    return pd.Series(future_y, index=future_months, name=f"Predicted (Degree {degree})")
+def exp_smoothing(price_data: pd.Series, years_to_predict: int = 3,
+                             predict_future: bool = True, predict_on=None,
+                             trend='add', seasonal=None, alpha=None) -> pd.Series:
+    """Exponential smoothing"""
+
+    model = ExponentialSmoothing(price_data, trend=trend, seasonal=seasonal, seasonal_periods=12)
+    fit = model.fit(optimized=True)
+
+    if predict_on is not None:
+        # Predict exactly for test/train dates
+        n_periods = len(predict_on)
+        forecast = fit.forecast(n_periods)
+        return pd.Series(forecast.values, index=predict_on, name="ExpSmoothing (Test)")
+
+    elif predict_future:
+        # Predict future months
+        last_date = price_data.index[-12]
+        future_months = pd.date_range(last_date + pd.DateOffset(months=1),
+                                      periods=12 * years_to_predict, freq="M")
+        forecast = fit.forecast(len(future_months))
+        return pd.Series(forecast.values, index=future_months, name="ExpSmoothing (Future)")
+
+    else:
+        # Predict for training period
+        forecast = fit.fittedvalues
+        return pd.Series(forecast.values, index=price_data.index, name="ExpSmoothing (Train)")
+
 
 def plot_trend(city_name: str, price_data: pd.Series, future_data: pd.Series):
     """Plot the historical and projected price data."""
@@ -150,18 +199,105 @@ def plot_trend(city_name: str, price_data: pd.Series, future_data: pd.Series):
     plt.tight_layout()
     plt.show()
 
+
+def evaluate_model(model_name, model_func, train, test, **kwargs):
+    """Train and evaluate a model given train/test data."""
+    # calls model functions
+    preds = model_func(train, predict_future=False, predict_on=test.index, **kwargs)
+
+    # Align and compute metrics
+    preds = preds.loc[test.index.intersection(preds.index)]
+    if preds.empty:
+        return f"\n--- {model_name} ---\nNo overlapping dates between train and test.\n"
+
+    return evaluate_predictions(test.loc[preds.index].values, preds.values, model_name)
+
+
+def evaluate_predictions(y_true, y_pred, label):
+    """Calculate and return model evaluation metrics including percent error."""
+    mse = mean_squared_error(y_true, y_pred)
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+
+    # Mean Absolute Percent Error (MAPE)
+    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+    return (
+        f"\n--- {label} ---\n"
+        f"MSE: {mse:.2f}\n"
+        f"MAE: {mae:.2f}\n"
+        f"R²: {r2:.4f}\n"
+        f"MAPE: {mape:.2f}%\n"
+    )
+
+
+def random_split(price_data: pd.Series, test_ratio=0.2):
+    """Return train/test sets for an 80/20 random split."""
+    n = len(price_data)
+    test_size = int(n * test_ratio)
+    shuffled = price_data.sample(frac=1, random_state=42)
+    train = shuffled.iloc[:-test_size].sort_index()
+    test = shuffled.iloc[-test_size:].sort_index()
+    return train, test, f"Random Split (80/20)"
+
+
+def recent_split(price_data: pd.Series, cutoff_years=3):
+    """Return train/test sets using last N years for testing."""
+    cutoff_date = price_data.index.max() - pd.DateOffset(years=cutoff_years)
+    train = price_data[price_data.index <= cutoff_date]
+    test = price_data[price_data.index > cutoff_date]
+    label = f"Recent split (Last {cutoff_years} Years) — cutoff {cutoff_date.date()}"
+    return train, test, label
+
+
 def main() -> None:
     state_initials = "CO"
-    county_name = "Mesa County"
+    county_name = "Auroa County"
     bedroom_num = 1
 
     df = filter_data(state_initials, county_name, bedroom_num)
 
     if not df.empty:
-        # future = predict_future_prices(df)
-        # future = linear_r_gd(df)
-        future = poly_r(df)
-        plot_trend(county_name +", " + state_initials, df, future)
+        # Future projection for visualization
+        future = exp_smoothing(df, years_to_predict=3, predict_future=True)
+        plot_trend(f"{county_name}, {state_initials}", df, future)
+        print(future.head())
+        print(future.tail())
+
+
+        # Clear old file
+        open("model_test_results.txt", "w").close()
+
+        # Models to test
+        models = [
+            ("Linear Regression", predict_future_prices),
+            ("Gradient Descent Linear", linear_r_gd),
+            ("Polynomial Regression (deg=3)", poly_r),
+            ("Exponential Smoothing", exp_smoothing)
+        ]
+
+        with open("model_test_results.txt", "a") as f:
+            f.write(f"\nTests for {county_name}, {state_initials}\n")
+
+        # Random split
+        train, test, split_label = random_split(df)
+        with open("model_test_results.txt", "a") as f:
+            f.write(f"\n=== {split_label} ===\n")
+
+        for model_name, func in models:
+            result = evaluate_model(model_name, func, train, test)
+            with open("model_test_results.txt", "a") as f:
+                f.write(result)
+
+        # Recent split
+        train, test, split_label = recent_split(df)
+        with open("model_test_results.txt", "a") as f:
+            f.write(f"\n=== {split_label} ===\n")
+
+        for model_name, func in models:
+            result = evaluate_model(model_name, func, train, test)
+            with open("model_test_results.txt", "a") as f:
+                f.write(result)
 
 
 if __name__ == "__main__":

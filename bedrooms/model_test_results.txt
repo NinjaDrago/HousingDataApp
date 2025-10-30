@@ -1,0 +1,54 @@
+
+Tests for Denver County, CO
+
+=== Random Split (80/20) ===
+
+--- Linear Regression ---
+MSE: 1063948980.11
+MAE: 27487.47
+R²: 0.7863
+MAPE: 15.18%
+
+--- Gradient Descent Linear ---
+MSE: 1063948980.11
+MAE: 27487.47
+R²: 0.7863
+MAPE: 15.18%
+
+--- Polynomial Regression (deg=3) ---
+MSE: 597533797.48
+MAE: 19742.32
+R²: 0.8800
+MAPE: 9.92%
+
+--- Exponential Smoothing ---
+MSE: 12846063672.21
+MAE: 103866.17
+R²: -1.5802
+MAPE: 53.81%
+
+=== Recent split (Last 3 Years) — cutoff 2022-09-30 ===
+
+--- Linear Regression ---
+MSE: 1654958301.26
+MAE: 36966.15
+R²: -13.6643
+MAPE: 11.14%
+
+--- Gradient Descent Linear ---
+MSE: 1654958301.26
+MAE: 36966.15
+R²: -13.6643
+MAPE: 11.14%
+
+--- Polynomial Regression (deg=3) ---
+MSE: 3938529515.33
+MAE: 53250.96
+R²: -33.8985
+MAPE: 16.63%
+
+--- Exponential Smoothing ---
+MSE: 247871676.77
+MAE: 13764.17
+R²: -1.1963
+MAPE: 4.27%
