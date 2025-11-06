@@ -55,7 +55,7 @@ def filter_data(state, county, bedroom = None):
 
 
 def predict_future_prices(price_data: pd.Series, years_to_predict: int = 3,
-                          predict_future: bool = True, predict_on=None) -> pd.Series:
+                          predict_future: bool = True, test_x=None) -> pd.Series:
     """Use linear regression to project future prices"""
     # Prepare training data
     X = np.array(price_data.index.year * 12 + price_data.index.month).reshape(-1, 1)
@@ -64,15 +64,15 @@ def predict_future_prices(price_data: pd.Series, years_to_predict: int = 3,
     model = LinearRegression()
     model.fit(X, y)
 
-    if predict_on is not None:
+    if test_x is not None:
         # Predict for test dates
-        X_test = np.array(predict_on.year * 12 + predict_on.month).reshape(-1, 1)
+        X_test = np.array(test_x.year * 12 + test_x.month).reshape(-1, 1)
         preds = model.predict(X_test)
-        return pd.Series(preds, index=predict_on, name="Predicted (Test)")
+        return pd.Series(preds, index=test_x, name="Predicted (Test)")
     elif predict_future:
         # Future prediction
         last_date = price_data.index[-12]
-        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="M")[1:]
+        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="ME")[1:]
         X_future = np.array(future_months.year * 12 + future_months.month).reshape(-1, 1)
         preds = model.predict(X_future)
         return pd.Series(preds, index=future_months, name="Predicted (Future)")
@@ -83,8 +83,7 @@ def predict_future_prices(price_data: pd.Series, years_to_predict: int = 3,
 
 
 def linear_r_gd(price_data: pd.Series, years_to_predict: int = 3,
-                learning_rate: float = 0.1, n_iterations: int = 10000,
-                predict_future: bool = True, predict_on=None) -> pd.Series:
+                learning_rate: float = 0.1, n_iterations: int = 10000, test_x=None) -> pd.Series:
     """Predicts future prices using simple linear regression trained via gradient descent."""
     X = np.array(price_data.index.year * 12 + price_data.index.month, dtype=float).reshape(-1, 1)
     y = price_data.values.reshape(-1, 1)
@@ -106,28 +105,23 @@ def linear_r_gd(price_data: pd.Series, years_to_predict: int = 3,
         m -= learning_rate * dm
         b -= learning_rate * db
 
-    if predict_on is not None:
+    if test_x is not None:
         # Predict for test dates
-        X_test = np.array(predict_on.year * 12 + predict_on.month, dtype=float).reshape(-1, 1)
+        X_test = np.array(test_x.year * 12 + test_x.month, dtype=float).reshape(-1, 1)
         X_test_norm = (X_test - X_mean) / X_std
         preds = m * X_test_norm + b
-        return pd.Series(preds.flatten(), index=predict_on, name="Predicted (Test)")
-    elif predict_future:
+        return pd.Series(preds.flatten(), index=test_x, name="Predicted (Test)")
+
+    else:
         # Future prediction
         last_date = price_data.index[-1]
-        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="M")[1:]
+        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="ME")[1:]
         X_future = np.array(future_months.year * 12 + future_months.month, dtype=float).reshape(-1, 1)
         X_future_norm = (X_future - X_mean) / X_std
         preds = m * X_future_norm + b
         return pd.Series(preds.flatten(), index=future_months, name="Predicted (Future)")
-    else:
-        # Predict within dataset
-        preds = m * X_norm + b
-        return pd.Series(preds.flatten(), index=price_data.index, name="Predicted (Train)")
 
-
-def poly_r(price_data: pd.Series, years_to_predict: int = 3, degree: int = 3,
-           predict_future: bool = True, predict_on=None) -> pd.Series:
+def poly_r(price_data: pd.Series, years_to_predict: int = 3, degree: int = 3, test_x=None) -> pd.Series:
     """Predict future prices using polynomial regression."""
     X = np.array(price_data.index.year * 12 + price_data.index.month, dtype=float).reshape(-1, 1)
     y = price_data.values
@@ -138,59 +132,52 @@ def poly_r(price_data: pd.Series, years_to_predict: int = 3, degree: int = 3,
     model = LinearRegression()
     model.fit(X_poly, y)
 
-    if predict_on is not None:
+    if test_x is not None:
         # Predict for test dates
-        X_test = np.array(predict_on.year * 12 + predict_on.month, dtype=float).reshape(-1, 1)
+        X_test = np.array(test_x.year * 12 + test_x.month, dtype=float).reshape(-1, 1)
         X_test_poly = poly.transform(X_test)
         preds = model.predict(X_test_poly)
-        return pd.Series(preds, index=predict_on, name=f"Predicted (Test deg={degree})")
-    elif predict_future:
+        return pd.Series(preds, index=test_x, name=f"Predicted (Test deg={degree})")
+
+    else:
         # Future prediction
         last_date = price_data.index[-12]
-        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="M")[1:]
+        future_months = pd.date_range(last_date, periods=12 * years_to_predict + 1, freq="ME")[1:]
         X_future = np.array(future_months.year * 12 + future_months.month, dtype=float).reshape(-1, 1)
         X_future_poly = poly.transform(X_future)
         preds = model.predict(X_future_poly)
         return pd.Series(preds, index=future_months, name=f"Predicted (Future deg={degree})")
-    else:
-        # Predict within dataset
-        preds = model.predict(X_poly)
-        return pd.Series(preds, index=price_data.index, name=f"Predicted (Train deg={degree})")
-
 
 def exp_smoothing(price_data: pd.Series, years_to_predict: int = 3,
-                             predict_future: bool = True, predict_on=None,
-                             trend='add', seasonal=None, alpha=None) -> pd.Series:
+                  start_forecast: str = "2024-01-01", test_x=None) -> pd.Series:
     """Exponential smoothing"""
 
-    model = ExponentialSmoothing(price_data, trend=trend, seasonal=seasonal, seasonal_periods=12)
+    model = ExponentialSmoothing(price_data,  trend='mul', seasonal='mul', seasonal_periods=12)
     fit = model.fit(optimized=True)
 
-    if predict_on is not None:
+    if test_x is not None:
         # Predict exactly for test/train dates
-        n_periods = len(predict_on)
+        n_periods = len(test_x)
         forecast = fit.forecast(n_periods)
-        return pd.Series(forecast.values, index=predict_on, name="ExpSmoothing (Test)")
-
-    elif predict_future:
-        # Predict future months
-        last_date = price_data.index[-12]
-        future_months = pd.date_range(last_date + pd.DateOffset(months=1),
-                                      periods=12 * years_to_predict, freq="M")
-        forecast = fit.forecast(len(future_months))
-        return pd.Series(forecast.values, index=future_months, name="ExpSmoothing (Future)")
+        return pd.Series(forecast.values, index=test_x, name="ExpSmoothing (Test)")
 
     else:
-        # Predict for training period
-        forecast = fit.fittedvalues
-        return pd.Series(forecast.values, index=price_data.index, name="ExpSmoothing (Train)")
+        # Predict future months
+        forecast_start = pd.Timestamp(start_forecast) + pd.offsets.MonthEnd(0)
+        forecast_end = price_data.index[-1] + pd.offsets.MonthEnd(12 * years_to_predict)
+        forecast_index = pd.date_range(start=forecast_start, end=forecast_end, freq='M')
+
+        forecast_values = fit.forecast(len(forecast_index))
+        forecast_series = pd.Series(forecast_values, index=forecast_index, name="ExpSmoothing (From 2024)")
+        return forecast_series
 
 
 def plot_trend(city_name: str, price_data: pd.Series, future_data: pd.Series):
     """Plot the historical and projected price data."""
     plt.figure(figsize=(10, 5))
     plt.plot(price_data.index, price_data.values, label='Historical Prices', color='blue')
-    plt.plot(future_data.index, future_data.values, label='Projected Prices', color='orange', linestyle='--')
+    plt.plot(future_data.index, future_data.values,
+             label='Projected Prices', color='orange', linestyle='--')
     plt.title(f"Median Home Sale Prices — {city_name}")
     plt.xlabel("Year")
     plt.ylabel("Median Sale Price (USD)")
@@ -203,7 +190,7 @@ def plot_trend(city_name: str, price_data: pd.Series, future_data: pd.Series):
 def evaluate_model(model_name, model_func, train, test, **kwargs):
     """Train and evaluate a model given train/test data."""
     # calls model functions
-    preds = model_func(train, predict_future=False, predict_on=test.index, **kwargs)
+    preds = model_func(train, test_x=test.index, **kwargs)
 
     # Align and compute metrics
     preds = preds.loc[test.index.intersection(preds.index)]
@@ -252,17 +239,16 @@ def recent_split(price_data: pd.Series, cutoff_years=3):
 
 def main() -> None:
     state_initials = "CO"
-    county_name = "Auroa County"
+    county_name = "Mesa County"
     bedroom_num = 1
 
     df = filter_data(state_initials, county_name, bedroom_num)
 
     if not df.empty:
         # Future projection for visualization
-        future = exp_smoothing(df, years_to_predict=3, predict_future=True)
+        future = exp_smoothing(df, years_to_predict=3)
+        # future = predict_from_2024(df)
         plot_trend(f"{county_name}, {state_initials}", df, future)
-        print(future.head())
-        print(future.tail())
 
 
         # Clear old file
