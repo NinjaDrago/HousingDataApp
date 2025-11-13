@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from datetime import datetime
 import os
 
 from offer_checker import check_offer_formula
@@ -90,6 +91,95 @@ def plot_prediction(city_name: str, price_data: pd.Series, predicted: pd.Series)
     plt.tight_layout()
     plt.show()
 
+
+def user_input_offer():
+    city = input("Enter city name: ").strip()
+
+    valid_states = {
+        "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+        "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+        "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+        "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+        "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
+    }
+    while True:
+        state = input("Enter state abbreviation (e.g., CO): ").strip().upper()
+        if state in valid_states:
+            break
+        print("Please enter a valid 2-letter state abbreviation.")
+
+    while True:
+        price_offer = float(input("Enter offer price: "))
+        if price_offer > 0:
+            break
+        print("Price must be greater than 0. Please enter a valid number.")
+
+    while True:
+        beds = int(input("Number of bedrooms (default 3): ") or 3)
+        if beds > 0:
+            break
+        print("Number of bedrooms must be greater than 0. Please enter a valid number")
+
+    while True:
+        baths = int(input("Number of bathrooms (default 2): ") or 2)
+        if baths > 0:
+            break
+        print("Number of bathrooms must be greater than 0. Please enter a valid number")
+
+    while True:
+        sqft = int(input("Square footage (default 1500): ") or 1500)
+        if sqft > 0:
+            break
+        print("Square footage of home must be greater than 0. Please enter a valid number")
+
+    while True:
+        lot_size_acres = float(input("Lot size in acres (default 0.1): ") or 0.1)
+        if sqft > 0:
+            break
+        else:
+            print("Square footage of home must be greater than 0. Please enter a valid number")
+
+
+    # gets current time
+    current_datetime = datetime.now()
+    while True:
+        year_built = int(input("Year built (default 2000): ") or 2000)
+        if year_built < 1500:
+            print("house too old (before 1500's). Please enter a valid year")
+        elif year_built > current_datetime.year:
+            print("Future year given. Please enter a valid year")
+        else:
+            break
+
+    while True:
+        property_type = input("Property type (single/duplex, default single): ").strip().lower()
+
+        if property_type == "" or property_type == "single":
+            property_type = "single"
+            break
+        elif property_type == "duplex":
+            break
+        else:
+            print("Invalid input. Please type 'single' or 'duplex'")
+
+    user_input = input("Has amenities (shop/irrigation)? (y/n, default n): ").strip().lower()
+
+    while True:
+        if user_input == "" or user_input == 'n':
+            has_amenities = False
+            break
+        elif user_input == 'y':
+            has_amenities = True
+            break
+        else:
+            print("Invalid input. Please type 'y' or 'n'")
+            user_input = input("Has amenities (shop/irrigation)? (y/n, default n): ").strip().lower()
+
+
+    return (city, state, price_offer, beds, baths, sqft, lot_size_acres,
+            year_built, property_type, has_amenities)
+
+
 # ----------------------------
 # Main Interactive Function
 # ----------------------------
@@ -127,17 +217,7 @@ def main():
                 print(e)
         
         elif choice == '2':
-            city = input("Enter city name: ").strip()
-            state = input("Enter state abbreviation (e.g., CO): ").strip()
-            price_offer = float(input("Enter offer price: "))
-            beds = int(input("Number of bedrooms (default 3): ") or 3)
-            baths = int(input("Number of bathrooms (default 2): ") or 2)
-            sqft = int(input("Square footage (default 1500): ") or 1500)
-            lot_size_acres = float(input("Lot size in acres (default 0.1): ") or 0.1)
-            year_built = int(input("Year built (default 2000): ") or 2000)
-            property_type = input("Property type (single/duplex, default single): ").strip().lower() or "single"
-            has_amenities_input = input("Has amenities (shop/irrigation)? (y/n, default n): ").strip().lower()
-            has_amenities = has_amenities_input == 'y'
+            city, state, price_offer, beds, baths, sqft, lot_size_acres, year_built, property_type, has_amenities = user_input_offer()
 
             result = check_offer_formula(
                 city, state, price_offer,
@@ -145,7 +225,7 @@ def main():
                 year_built, property_type, has_amenities
             )
             print(result)
-        
+
         elif choice == 'q':
             break
         else:
