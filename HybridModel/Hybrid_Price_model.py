@@ -3,6 +3,7 @@
 Hybrid Housing Tool
 - Mode 1: Price trend prediction using Zillow CSV + Holt-Winters
 - Mode 2: Check a property offer (self-contained formula-based)
+- Mode 3: City Economic Analysis (population forecast via Census CSV)
 """
 
 import pandas as pd
@@ -14,26 +15,32 @@ import os
 
 from offer_checker import check_offer_formula
 
+# Import population_forecast module
+from population_forecast import (
+    load_census_data,
+    get_population_trend,
+    forecast_population,
+    plot_population_forecast
+)
+
 # ----------------------------
-# File paths for Mode 1 (optional)
+# File paths for Mode 1
 # ----------------------------
 ZILLOW_PATH = "zillow_data.csv"
 ZILLOW_PATH_2 = "zillow_data2.csv"
-ZIP_MAPPING_PATH = "zip_to_city.csv"  # CSV with ZIP,CITY,STATE
+ZIP_MAPPING_PATH = "zip_to_city.csv"
 
 # ----------------------------
-# Load Zillow data (Mode 1)
+# Load Zillow data
 # ----------------------------
 def load_zillow() -> pd.DataFrame:
     if not os.path.exists(ZILLOW_PATH) and not os.path.exists(ZILLOW_PATH_2):
         raise FileNotFoundError("No Zillow data files found.")
-
     df_list = []
     if os.path.exists(ZILLOW_PATH):
         df_list.append(pd.read_csv(ZILLOW_PATH, low_memory=False))
     if os.path.exists(ZILLOW_PATH_2):
         df_list.append(pd.read_csv(ZILLOW_PATH_2, low_memory=False))
-
     combined = pd.concat(df_list).drop_duplicates(subset=["RegionName"], keep="last") if len(df_list) > 1 else df_list[0]
     return combined
 
@@ -91,120 +98,86 @@ def plot_prediction(city_name: str, price_data: pd.Series, predicted: pd.Series)
     plt.tight_layout()
     plt.show()
 
+# ----------------------------
+# Mode 3: City Economic Analysis with Holt-Winters Forecast
+# ----------------------------
+def mode3_city_analysis():
+    print("\n--- City Economic Analysis (Population Forecast) ---")
+    city = input("Enter city/county name (e.g., Mesa): ").strip()
+    state = input("Enter state abbreviation (e.g., CO): ").strip().upper()
+    
+    try:
+        census_df = load_census_data()
+        pop_trend = get_population_trend(city, state, census_df)
+    except Exception as e:
+        pop_trend = None
+        print("Population fetch error:", e)
+    
+    if pop_trend:
+        # Forecast 2025
+        combined_series, forecast_series = forecast_population(pop_trend, forecast_years=1)
+        historical_years = list(map(float, pop_trend.keys()))
+        plot_population_forecast(combined_series, city, state, historical_years=historical_years)
 
+        # Print forecast 2025 safely
+        print(f"\nForecasted Population for {city}, {state}:")
+        for year, pop in forecast_series.items():
+            if pd.isna(pop):
+                print(f"{int(year)}: Forecast not available")
+            else:
+                print(f"{int(year)}: {int(round(pop)):,}")
+    else:
+        print(f"No population data available for {city}, {state}.")
+
+
+# ----------------------------
+# User input helper for Mode 2
+# ----------------------------
 def user_input_offer():
     city = input("Enter city name: ").strip()
-
-    valid_states = {
-        "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
-        "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
-        "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
-        "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
-        "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
-    }
+    valid_states = { "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+        "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+        "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"}
     while True:
         state = input("Enter state abbreviation (e.g., CO): ").strip().upper()
-        if state in valid_states:
-            break
+        if state in valid_states: break
         print("Please enter a valid 2-letter state abbreviation.")
-
     while True:
         price_offer = float(input("Enter offer price: "))
-        if price_offer > 0:
-            break
-        print("Price must be greater than 0. Please enter a valid number.")
-
-    while True:
-        beds = int(input("Number of bedrooms (default 3): ") or 3)
-        if beds > 0:
-            break
-        print("Number of bedrooms must be greater than 0. Please enter a valid number")
-
-    while True:
-        baths = int(input("Number of bathrooms (default 2): ") or 2)
-        if baths > 0:
-            break
-        print("Number of bathrooms must be greater than 0. Please enter a valid number")
-
-    while True:
-        sqft = int(input("Square footage (default 1500): ") or 1500)
-        if sqft > 0:
-            break
-        print("Square footage of home must be greater than 0. Please enter a valid number")
-
-    while True:
-        lot_size_acres = float(input("Lot size in acres (default 0.1): ") or 0.1)
-        if sqft > 0:
-            break
-        else:
-            print("Square footage of home must be greater than 0. Please enter a valid number")
-
-
-    # gets current time
+        if price_offer > 0: break
+        print("Price must be greater than 0.")
+    beds = int(input("Number of bedrooms (default 3): ") or 3)
+    baths = int(input("Number of bathrooms (default 2): ") or 2)
+    sqft = int(input("Square footage (default 1500): ") or 1500)
+    lot_size_acres = float(input("Lot size in acres (default 0.1): ") or 0.1)
     current_datetime = datetime.now()
-    while True:
-        year_built = int(input("Year built (default 2000): ") or 2000)
-        if year_built < 1500:
-            print("house too old (before 1500's). Please enter a valid year")
-        elif year_built > current_datetime.year:
-            print("Future year given. Please enter a valid year")
-        else:
-            break
-
-    while True:
-        property_type = input("Property type (single/duplex, default single): ").strip().lower()
-
-        if property_type == "" or property_type == "single":
-            property_type = "single"
-            break
-        elif property_type == "duplex":
-            break
-        else:
-            print("Invalid input. Please type 'single' or 'duplex'")
-
-    user_input = input("Has amenities (shop/irrigation)? (y/n, default n): ").strip().lower()
-
-    while True:
-        if user_input == "" or user_input == 'n':
-            has_amenities = False
-            break
-        elif user_input == 'y':
-            has_amenities = True
-            break
-        else:
-            print("Invalid input. Please type 'y' or 'n'")
-            user_input = input("Has amenities (shop/irrigation)? (y/n, default n): ").strip().lower()
-
-
-    return (city, state, price_offer, beds, baths, sqft, lot_size_acres,
-            year_built, property_type, has_amenities)
-
+    year_built = int(input("Year built (default 2000): ") or 2000)
+    property_type = input("Property type (single/duplex, default single): ").strip().lower() or "single"
+    has_amenities = input("Has amenities (shop/irrigation)? (y/n, default n): ").strip().lower() == 'y'
+    return (city, state, price_offer, beds, baths, sqft, lot_size_acres, year_built, property_type, has_amenities)
 
 # ----------------------------
 # Main Interactive Function
 # ----------------------------
 def main():
-    # Optional: load Zillow for Mode 1
     zillow_df = None
     zip_df = None
     try:
         zillow_df = load_zillow()
         zip_df = load_zip_mapping()
-        print("Zillow CSV loaded for Mode 1 trend predictions.")
+        print("Zillow CSV loaded.")
+        print("ZIP mapping loaded.")
     except FileNotFoundError:
-        print("Zillow CSV not found. Mode 1 will not work, but Mode 2 is fully functional.")
+        print("Zillow or ZIP mapping CSV not found.")
 
     while True:
         print("\nChoose mode:")
-        print("1: Predict price trend (Zillow + Holt-Winters)")
-        print("2: Check a property offer (Formula-based)")
+        print("1: Predict price trend")
+        print("2: Check a property offer")
+        print("3: City Economic Analysis (population forecast)")
         print("q: Quit")
         choice = input("Enter choice: ").strip().lower()
-        
-        if choice == '1':
-            if zillow_df is None:
-                print("Zillow data not available. Cannot use Mode 1.")
-                continue
+        if choice=='1':
             city_name = input("Enter a city name (e.g., Grand Junction, CO): ").strip()
             try:
                 prices = get_city_data(zillow_df, city_name)
@@ -215,21 +188,16 @@ def main():
                 plot_prediction(city_name, prices, predicted)
             except ValueError as e:
                 print(e)
-        
-        elif choice == '2':
-            city, state, price_offer, beds, baths, sqft, lot_size_acres, year_built, property_type, has_amenities = user_input_offer()
-
-            result = check_offer_formula(
-                city, state, price_offer,
-                beds, baths, sqft, lot_size_acres,
-                year_built, property_type, has_amenities
-            )
+        elif choice=='2':
+            args = user_input_offer()
+            result = check_offer_formula(*args)
             print(result)
-
-        elif choice == 'q':
+        elif choice=='3':
+            mode3_city_analysis()
+        elif choice=='q':
             break
         else:
             print("Invalid choice. Try again.")
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
