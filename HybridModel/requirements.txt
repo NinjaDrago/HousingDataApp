@@ -3,3 +3,4 @@ numpy
 matplotlib
 statsmodels
 flask
+scikit-learn
