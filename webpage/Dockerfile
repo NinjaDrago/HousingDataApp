@@ -1,0 +1,15 @@
+# Use an official Python image
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Expose Flask's default port
+EXPOSE 5000
+
+CMD ["python", "app.py"]

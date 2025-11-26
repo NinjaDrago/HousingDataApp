@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Input infomation of offer</h1>
+
+<form action="/process_offer" method="POST">
+    <label for="city">City:</label>
+    <input type="text" id="city" name="city" required>
+    <br><br>
+    
+    <label for="state">State abbreviation:</label>
+    <input type="text" id="state" name="state" placeholder="e.g. CO" required>
+    <br><br>
+    
+    <label for="offer">Offer price:</label>
+    <input type="number" id="offer" name="offer" required>
+    <br><br>
+
+    <label for="beds">Number of beds:</label>
+    <input type="number" id="beds" name="beds" placeholder="default 3"> 
+    <br><br>
+
+    <label for="baths">Number of baths:</label>
+    <input type="number" id="baths" name="baths" placeholder="default 2">
+    <br><br>
+
+    <label for="sqft">Square footage:</label>
+    <input type="number" id="sqft" name="sqft" placeholder="default 1500">
+    <br><br>
+
+    <label for="lot_size">Lot size:</label>
+    <input type="number" id="lot_size" name="lot_size" placeholder="default 0.1">
+    <br><br>
+
+    <label for="year_built">Year built:</label>
+    <input type="number" id="year_built" name="year_built" placeholder="default 2000">
+    <br><br>
+
+    <label for="propety_type">Propety type:</label>
+    <input type="text" id="propety_type" name="propety_type" placeholder="(single/duplex) default single">
+    <br><br>
+
+    <label for="has_amenities">Has amenities:</label>
+    <input type="text" id="has_amenities" name="has_amenities" placeholder="(y/n) default n">
+    <br><br>
+
+    <button type="submit">Submit</button>
+</form>
+
+{% if error %}
+    <p style="color: red;">{{ error }}</p>
+{% endif %}
+
+{% if result %}
+    <p>{{ result }}</p>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Enter city information</h1>
+
+<form action="/process_predict" method="POST">
+    <label for="city">City:</label>
+    <input type="text" id="city" name="city" required>
+    
+    <br><br>
+    
+    <label for="state">State abbreviation:</label>
+    <input type="text" id="state" name="state" placeholder="e.g. CO" required>
+    
+    <br><br>
+    
+    <button type="submit">Submit</button>
+</form>
+
+{% if error %}
+    <p style="color: red;">{{ error }}</p>
+{% endif %}
+
+{% if city %}
+    <img src="{{ url_for('plot_predict', city=city) }}" alt="Plot for {{ city }}">
+{% endif %}
+
+{% endblock %}
