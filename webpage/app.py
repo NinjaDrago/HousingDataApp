@@ -177,35 +177,44 @@ def process_population():
             error = str(ve)
     return render_template("population.html", title="Population", result=result, city=city, state=state, error=error)
 
-@app.route("/plot_population.png")
+
+@app.route("/plot_population")
 def plot_population():
     city = request.args.get("city")
     state = request.args.get("state")
-    if not city or not state:
-        return "Missing city or state", 400
 
+    print("DEBUG city/state:", city, state)
+
+    census_df = load_census_data()
+    print("Columns in census_df:", census_df.columns.tolist())
     try:
-        census_df = load_census_data()
         pop_trend = get_population_trend(city, state, census_df)
+        print("DEBUG pop_trend:", pop_trend)
     except Exception as e:
-        pop_trend = None
-        print("Population fetch error:", e)
+        print("ERROR:", e)
+        import traceback; traceback.print_exc()
+        return "Internal error", 500
+
+    if not pop_trend:
+        return f"DEBUG: No population data found for {city}, {state}", 404
 
     if pop_trend:
-        # Forecast 2025
         combined_series, forecast_series = forecast_population(pop_trend, forecast_years=1)
         historical_years = list(map(float, pop_trend.keys()))
-        plot_population_forecast(combined_series, city, state, historical_years=historical_years)
 
-        # Print forecast 2025 safely
-        print(f"\nForecasted Population for {city}, {state}:")
-        for year, pop in forecast_series.items():
-            if pd.isna(pop):
-                print(f"{int(year)}: Forecast not available")
-            else:
-                print(f"{int(year)}: {int(round(pop)):,}")
+        # Get the image bytes from your plotting function
+        img_bytes = plot_population_forecast(
+            combined_series,
+            city,
+            state,
+            historical_years=historical_years
+        )
+
+        return send_file(img_bytes, mimetype="image/png")
+
     else:
-        print(f"No population data available for {city}, {state}.")
+        return "No population data found", 404
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

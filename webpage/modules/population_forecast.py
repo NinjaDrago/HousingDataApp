@@ -124,7 +124,7 @@ def plot_population_forecast(combined_series: pd.Series, city: str, state_abbr: 
     historical_mask = [y in historical_years for y in years]
     forecast_mask = [not m for m in historical_mask]
 
-    plt.figure(figsize=(10,5))
+    plt.figure(figsize=(6,3))
     
     # Plot the full line (connects historical + forecast)
     plt.plot(years, pops, linestyle='-', linewidth=2, color='blue', label='Population Trend')
