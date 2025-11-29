@@ -183,20 +183,13 @@ def plot_population():
     city = request.args.get("city")
     state = request.args.get("state")
 
-    print("DEBUG city/state:", city, state)
-
     census_df = load_census_data()
-    print("Columns in census_df:", census_df.columns.tolist())
     try:
         pop_trend = get_population_trend(city, state, census_df)
-        print("DEBUG pop_trend:", pop_trend)
+
     except Exception as e:
         print("ERROR:", e)
-        import traceback; traceback.print_exc()
         return "Internal error", 500
-
-    if not pop_trend:
-        return f"DEBUG: No population data found for {city}, {state}", 404
 
     if pop_trend:
         combined_series, forecast_series = forecast_population(pop_trend, forecast_years=1)
