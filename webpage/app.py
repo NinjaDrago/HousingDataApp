@@ -5,7 +5,7 @@ how to run:
 build:
     docker build -t web-app .
 run:
-    docker run -p 5000:5000 web-app
+    docker run -p 5000:5000 -v $(pwd):/app web-app
 """
 import pandas as pd
 
